@@ -1,0 +1,180 @@
+clear;figure;
+
+tic
+% obstacle = {[1 2;2 1;3 1],[4 3;5 2;7 1;6 5]};start = [0,0]; goal = [8,3]; step = 0.5; 
+% obstacle = {[1 2;1 0;3 0],[2 3;4 1;5 2]};start = [0,0]; goal = [5,3]; step = 0.1;
+obstacle = {[1 1;4 0;0 3],[4 4;5 2;8 1;6 6],[12 2;11 7;10 4]};start = [0,0]; goal = [14,5]; step = 0.1;
+X = cell(1,length(obstacle));Y = cell(1,length(obstacle));
+for i=1:length(obstacle)
+    X{i} = obstacle{i}(:,1); Y{i} = obstacle{i}(:,2);
+    pgon = polyshape(X{i},Y{i});
+    plot(pgon);hold on;
+end
+
+x = start(1); y = start(2); a = goal(1); b = goal(2);
+path = zeros(10000,2);pathindex = 0;minpathindex = 0;
+xx = 0; yy = 0; flag = 0; sign = 0;
+inindex = 0; inflag = 0;
+
+pointplace = 0; vsign = 0;
+while ((x-a)^2+(y-b)^2) >= step^2
+        dx = a - x; dy = b - y; dist = sqrt(dx^2+dy^2);
+        if flag==0
+            % 计算直接向目标点移动一次的 dx 与 dy
+            xx = step * dx/sqrt(dx^2+dy^2);yy = step * dy/sqrt(dx^2+dy^2);
+            % 判断移动一步后的点是否碰到障碍物
+            for i = 1:length(obstacle)
+                [in,on] = inpolygon(x+xx,y+yy,X{i},Y{i});
+                if in || on
+                    inflag = 1; inindex = i; 
+                    break;
+                end
+            end
+            
+            
+            if inflag
+                % 如果碰到障碍物，求出碰到的障碍物的每条边的A、B、C： Ax + By + C = 0
+                A=[];B=[];C=[];Av=[];Bv=[];Cv=[];
+                for i=1:length(X{inindex})-1
+                   A(i) = Y{inindex}(i+1)-Y{inindex}(i);
+                   B(i) = X{inindex}(i)-X{inindex}(i+1);
+                   C(i) = X{inindex}(i+1)*Y{inindex}(i)-X{inindex}(i)*Y{inindex}(i+1);
+                end
+                A(length(X{inindex})) = Y{inindex}(1) - Y{inindex}(length(X{inindex}));
+                B(length(X{inindex})) = X{inindex}(length(X{inindex})) - X{inindex}(1);
+                C(length(X{inindex})) = X{inindex}(1)*Y{inindex}(length(X{inindex}))-X{inindex}(length(X{inindex}))*Y{inindex}(1);
+                % 与边垂直的直线，后面在顶点处转弯需要使用
+                for i=1:length(X{inindex})-1
+                   Bv(i) = Y{inindex}(i+1)-Y{inindex}(i);
+                   Av(i) = -X{inindex}(i)+X{inindex}(i+1);
+                   Cv(i) = -(X{inindex}(i+1)^2+Y{inindex}(i+1)^2-X{inindex}(i)*X{inindex}(i+1)-Y{inindex}(i)*Y{inindex}(i+1));
+                end
+                Bv(length(X{inindex})) = Y{inindex}(1) - Y{inindex}(length(X{inindex}));
+                Av(length(X{inindex})) = -X{inindex}(length(X{inindex})) + X{inindex}(1);
+                Cv(length(X{inindex})) = -(X{inindex}(1)^2+Y{inindex}(1)^2-Y{inindex}(length(X{inindex}))*Y{inindex}(1)-X{inindex}(length(X{inindex}))*X{inindex}(1));
+                inflag = 0;
+            end
+        end
+        
+        % 线性里程表，计算顺时针还是逆时针到离开的点更近
+        if flag==2
+            for i=1:length(repath)
+                x = repath(i,1);y = repath(i,2);
+                plot(x,y,'b.');
+                pause(0.1);
+            end
+            in = 0; on = 0;
+            pathindex = 0;
+            minpathindex = 0;
+            flag = 0;
+            xx = 0; yy = 0;
+        end
+
+        % 碰到障碍物
+        if in || on
+            p_hit = [x y]; % 撞击点
+            flag = 1;
+            side_dist = (A.*x+B.*y+C)./sqrt(A.*A+B.*B); % 求出与障碍物每条边的距离
+            minside = 0;
+            % 求出碰到的边
+            for i=1:length(side_dist)
+                mov_xx = -step * B(i)/sqrt(A(i)^2+B(i)^2);
+                mov_yy = step * A(i)/sqrt(A(i)^2+B(i)^2);
+                next_sidedist=(A(i)*(x+xx)+B(i)*(y+yy)+C(i))/sqrt(A(i)^2+B(i)^2);
+                if side_dist(i)*next_sidedist < 0
+                    minside = i;
+                end
+            end
+            mindist = inf; changeside = 0; sideindex = minside;
+            for j=1:length(A)+1
+                while changeside ~= 1  % 沿着碰到的边运动
+                    pathindex = pathindex + 1;
+                    path(pathindex,:) = [x y];
+                    if ~pointplace
+                        xx = -step * B(sideindex)/sqrt(A(sideindex)^2+B(sideindex)^2);
+                        yy = step * A(sideindex)/sqrt(A(sideindex)^2+B(sideindex)^2);
+                    else
+                        xx = -step * Bv(sideindex)/sqrt(Av(sideindex)^2+Bv(sideindex)^2);
+                        yy = step * Av(sideindex)/sqrt(Av(sideindex)^2+Bv(sideindex)^2);
+                    end
+%                     nextpoint = [X{inindex}(mod(sideindex,length(A))+1),Y{inindex}(mod(sideindex,length(A))+1)];
+%                     nextpointdist_before = sqrt((x-nextpoint(1))^2+(y-nextpoint(2))^2);
+                    x = x + xx; y = y + yy;
+%                     points{end+1} = [x,y];
+                    plot(x,y,'r.');
+                    pause(0.1);
+                    dist = (x-a)^2+(y-b)^2;
+                    if (j==length(A)+1) && ((p_hit(1)-x)^2+(p_hit(2)-y)^2 < 1.44*step^2)
+                        path1 = minpathindex; path2 = pathindex - minpathindex;
+                        if path1 <= path2
+                            repath = path(1:path1,:);
+                        else
+                            repath = path(pathindex:-1:minpathindex,:);
+                        end
+                        break;
+                    end
+                    if dist < mindist
+                        mindist = dist;
+                        p_leave = [x y];
+                        minpathindex = pathindex;
+                    end
+                    
+                    % 点与按逆时针顺序的下一条边的距离（有正负）
+%                     nextpointdist = sqrt((x-nextpoint(1))^2+(y-nextpoint(2))^2);
+                    nextsidedist = (A(mod(sideindex,length(A))+1)*x+B(mod(sideindex,length(A))+1)*y+...
+                    C(mod(sideindex,length(A))+1))/sqrt(A(mod(sideindex,length(A))+1)^2+B(mod(sideindex,length(A))+1)^2);
+                    vsidedist = (Av(sideindex)*x+Bv(sideindex)*y+Cv(sideindex))/sqrt(Av(sideindex)^2+Bv(sideindex)^2);
+%                     if sign==0 && nextsidedist <= 0
+%                         sign = -1;
+%                     end
+%                     if sign==0 && nextsidedist > 0
+%                         sign = 1;
+%                     end
+%                     if nextpointdist > nextpointdist_before                      
+%                         while nextsidedist/sign > 0
+%                             xx = step * A(sideindex)/sqrt(A(sideindex)^2+B(sideindex)^2);
+%                             yy = step * B(sideindex)/sqrt(A(sideindex)^2+B(sideindex)^2);
+%                             x = x + xx; y = y + yy;
+%                             plot(x,y,'ro');hold on;
+%                         end
+%                         changeside = 1;
+%                     end
+                      if sign==0 && nextsidedist <= 0
+                            sign = -1;
+                      end
+                      if sign==0 && nextsidedist > 0
+                            sign = 1;
+                      end
+                      if vsign==0 && vsidedist <= 0
+                            vsign = -1;
+                      end
+                      if vsign==0 && vsidedist > 0
+                            vsign = 1;
+                      end
+                      if vsidedist/vsign > 0
+                          changeside = 0;
+                      else
+                            pointplace = 1;
+                            if nextsidedist/sign < 0
+                                changeside = 1;
+                            end
+                      end
+                end
+                if changeside == 1  % 换下一条边继续移动
+                    sideindex = mod(sideindex,length(A))+1;
+                    changeside = 0; vsign = 0; sign = 0; pointplace = 0;
+                end
+                flag = 2;
+            end                 
+        else
+            x = x + xx; y = y + yy;
+%             points{end+1} = [x,y];
+            plot(x,y,'r.');
+            pause(0.1);
+        end   
+        toc
+        if toc > 3600
+            points = 'No Path Exists!';
+            break;
+        end
+end
